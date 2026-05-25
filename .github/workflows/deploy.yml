@@ -1,0 +1,97 @@
+name: Deploy to AWS (Kubernetes)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/orcastration-wordpress
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_NAME }}:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update image version in Kubernetes manifests
+        run: |
+          sed -i "s|denysdock/devops-app:latest|${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}|g" k8s/app-deploy.yml
+
+      - name: Copy Kubernetes manifests and Nginx config to AWS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USERNAME }}
+          key: ${{ secrets.AWS_SSH_KEY }}
+          source: "k8s/,nginx/"
+          target: "~/deploy-wordpress"
+
+      - name: Deploy on AWS and configure Nginx + SSL
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DOMAIN: ${{ secrets.DOMAIN }}
+          EMAIL: ${{ secrets.LETSENCRYPT_EMAIL }}
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USERNAME }}
+          key: ${{ secrets.AWS_SSH_KEY }}
+          envs: DOMAIN,EMAIL
+          script: |
+            set -e
+
+            # Enable kubernetis manifests
+            cd ~/deploy-wordpress
+            kubectl apply -f k8s/
+            
+            # Wait for pods to launch
+            kubectl wait deployment/devops-app --for condition=Available=True --timeout=120s || true
+
+            # Get NodePort for service
+            NODE_PORT=$(kubectl get svc webapp-service -o=jsonpath='{.spec.ports[0].nodePort}')
+            echo "Service is running on NodePort: $NODE_PORT"
+
+            export DOMAIN NODE_PORT
+
+            # Substitute env variables in our template and move to Nginx folder
+            envsubst '\$DOMAIN \$NODE_PORT' < ~/deploy-wordpress/nginx/site.conf.template | sudo tee /etc/nginx/sites-available/$DOMAIN > /dev/null
+
+            # Activate config
+            sudo ln -sf /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
+            sudo nginx -t
+            sudo systemctl reload nginx
+
+            # Get ssl sertificate
+            if [ -n "$DOMAIN" ] && [ -n "$EMAIL" ]; then
+              if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+                echo "Requesting new SSL certificate..."
+                sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos -m $EMAIL --redirect
+              else
+                echo "Renewing existing SSL certificate..."
+                sudo certbot renew --quiet
+              fi
+            fi
