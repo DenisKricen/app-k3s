@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devops-app
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devops-app
+
+  template:
+    metadata:
+      labels:
+        app: devops-app
+
+    spec:
+      initContainers:
+        - name: run-migrations
+          image: denysdock/devops-app:latest
+          command: ["bundle", "exec", "rails", "db:migrate"]
+          env:
+            - name: POSTGRES_HOST
+              value: "postgres"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: pg-secret
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pg-secret
+                  key: password
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: pg-secret
+                  key: database
+            - name: DATABASE_URL
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):5432/$(POSTGRES_DB)"
+
+      containers:
+      - name: devops-app
+        image: denysdock/devops-app:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: POSTGRES_HOST
+          value: "postgres"
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: pg-secret
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pg-secret
+              key: password
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: pg-secret
+              key: database
+        - name: DATABASE_URL
+          value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):5432/$(POSTGRES_DB)"
