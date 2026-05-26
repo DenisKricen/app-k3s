@@ -99,7 +99,7 @@ jobs:
             if [ -n "$DOMAIN" ] && [ -n "$EMAIL" ]; then
               if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
                 echo "Requesting new SSL certificate..."
-                sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos -m $EMAIL --redirect
+                sudo certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m $EMAIL --redirect
               else
                 echo "Renewing existing SSL certificate..."
                 sudo certbot renew --quiet
