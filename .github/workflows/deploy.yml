@@ -94,13 +94,4 @@ jobs:
               sudo systemctl reload nginx
             fi
 
-            # Get ssl certificate using webroot for auth and nginx for install
-            if [ -n "$DOMAIN" ] && [ -n "$EMAIL" ]; then
-              if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
-                echo "Requesting new SSL certificate..."
-                sudo certbot --authenticator webroot --webroot-path /var/www/html --installer nginx -d $DOMAIN --non-interactive --agree-tos -m $EMAIL --redirect
-              else
-                echo "Renewing existing SSL certificate..."
-                sudo certbot renew --quiet
-              fi
-            fi
+            
