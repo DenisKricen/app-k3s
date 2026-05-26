@@ -76,21 +76,12 @@ jobs:
             # Wait for pods to launch
             kubectl wait deployment/devops-app --for condition=Available=True --timeout=120s || true
 
-            # Get NodePort for service
-            NODE_PORT=$(kubectl get svc webapp-service -o=jsonpath='{.spec.ports[0].nodePort}')
-            echo "Service is running on NodePort: $NODE_PORT"
-
-            export DOMAIN NODE_PORT
-
             # Create challenge directory and set permissions
             sudo mkdir -p /var/www/html/.well-known/acme-challenge
             sudo chown -R www-data:www-data /var/www/html
 
-            # Remove default Nginx config to prevent port 80 conflicts
-            sudo rm -f /etc/nginx/sites-enabled/default
-
-            # Substitute env variables in our template and move to Nginx folder
-            envsubst '\$DOMAIN \$NODE_PORT' < ~/deploy-wordpress/nginx/site.conf.template | sudo tee /etc/nginx/sites-available/$DOMAIN > /dev/null
+            # Enabling nginx configuration
+            sudo cp ~/deploy-wordpress/nginx/site.conf /etc/nginx/sites-available/$DOMAIN
 
             # Activate config
             sudo ln -sf /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
