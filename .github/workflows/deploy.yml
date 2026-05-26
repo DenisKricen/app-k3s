@@ -88,7 +88,12 @@ jobs:
             # Activate config
             sudo ln -sf /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
             sudo nginx -t
-            sudo systemctl reload nginx
+            # Start nginx if not running, otherwise reload
+            if ! systemctl is-active --quiet nginx; then
+              sudo systemctl start nginx
+            else
+              sudo systemctl reload nginx
+            fi
 
             # Get ssl sertificate
             if [ -n "$DOMAIN" ] && [ -n "$EMAIL" ]; then
