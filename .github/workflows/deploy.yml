@@ -69,7 +69,7 @@ jobs:
             sudo chown ubuntu:ubuntu ~/.kube/config
             sudo chmod 600 ~/.kube/config
 
-            # Enable kubernetis manifests
+            # Enable kubernetes manifests
             cd ~/deploy-wordpress
             kubectl apply -f k8s/ --validate=false
             
@@ -82,12 +82,20 @@ jobs:
 
             export DOMAIN NODE_PORT
 
+            # Create challenge directory and set permissions
+            sudo mkdir -p /var/www/html/.well-known/acme-challenge
+            sudo chown -R www-data:www-data /var/www/html
+
+            # Remove default Nginx config to prevent port 80 conflicts
+            sudo rm -f /etc/nginx/sites-enabled/default
+
             # Substitute env variables in our template and move to Nginx folder
             envsubst '\$DOMAIN \$NODE_PORT' < ~/deploy-wordpress/nginx/site.conf.template | sudo tee /etc/nginx/sites-available/$DOMAIN > /dev/null
 
             # Activate config
             sudo ln -sf /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
             sudo nginx -t
+
             # Start nginx if not running, otherwise reload
             if ! systemctl is-active --quiet nginx; then
               sudo systemctl start nginx
@@ -95,11 +103,11 @@ jobs:
               sudo systemctl reload nginx
             fi
 
-            # Get ssl sertificate
+            # Get ssl certificate using webroot for auth and nginx for install
             if [ -n "$DOMAIN" ] && [ -n "$EMAIL" ]; then
               if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
                 echo "Requesting new SSL certificate..."
-                sudo certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m $EMAIL --redirect
+                sudo certbot --authenticator webroot --webroot-path /var/www/html --installer nginx -d $DOMAIN --non-interactive --agree-tos -m $EMAIL --redirect
               else
                 echo "Renewing existing SSL certificate..."
                 sudo certbot renew --quiet

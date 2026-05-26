@@ -2,13 +2,14 @@ server {
     listen 80;
     server_name ${DOMAIN};
 
-    # Proceed Centification requests locally
+    # If its certification check, then proceed locally
     location ^~ /.well-known/acme-challenge/ {
+        default_type "text/plain";
         root /var/www/html;
         allow all;
     }
 
-    # All other requests send to K8s
+    # Route request to k8s
     location / {
         proxy_pass http://127.0.0.1:${NODE_PORT};
         proxy_set_header Host $host;
