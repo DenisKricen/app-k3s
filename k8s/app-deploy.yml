@@ -47,7 +47,7 @@ spec:
         - containerPort: 3000
         env:
         - name: ALLOWED_HOST
-          value: "worldpress-k8s.duckdns.org"
+          value: "app-k3s.duckdns.org"
         - name: POSTGRES_HOST
           value: "postgres"
         - name: POSTGRES_USER
